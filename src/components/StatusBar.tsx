@@ -4,7 +4,6 @@ import React from 'react';
 import {
   GitBranchIcon,
   FileTreeIcon,
-  ExtensionsIcon,
   SearchIcon,
   BoltIcon,
   CheckIcon,
@@ -28,7 +27,6 @@ interface StatusBarProps {
 }
 
 function StatusBar({
-  activeFileName,
   activeFileType,
   cursorLine,
   cursorCol,
@@ -96,8 +94,8 @@ function StatusBar({
         <button
           className={`statusbar-btn${terminalOpen ? ' active' : ''}`}
           onClick={onToggleTerminal}
-          title="Toggle Bottom Panel (⌘`)"
-          aria-label="Toggle bottom panel"
+          title={terminalOpen ? 'Close Terminal (⌘`)' : 'Open Terminal (⌘`)'}
+          aria-label="Toggle terminal"
         >
           <TerminalIcon size={14} />
         </button>

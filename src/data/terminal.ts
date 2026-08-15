@@ -24,7 +24,7 @@ export const terminalSequence: TerminalEntry[] = [
       '{',
       '  "role": "Full‑Stack Engineer",',
       '  "focus": ["Type‑safe full‑stack", "ML pipelines", "Design systems"],',
-      '  "status": "open_to_roles",',
+      '  "status": "currently_employed",',
       '  "location": "Bengaluru / Remote"',
       '}',
     ],

@@ -25,6 +25,7 @@ function TerminalPanel({ isOpen, onToggle }: TerminalPanelProps) {
   const [isTyping, setIsTyping] = useState(false);
   const [sequenceIndex, setSequenceIndex] = useState(0);
   const [animationComplete, setAnimationComplete] = useState(false);
+  const [showCloseHint, setShowCloseHint] = useState(false);
   const terminalBodyRef = useRef<HTMLDivElement>(null);
   const animationStarted = useRef(false);
 
@@ -98,6 +99,12 @@ function TerminalPanel({ isOpen, onToggle }: TerminalPanelProps) {
 
     runSequence();
   }, [isOpen, typeCommand, scrollToBottom]);
+
+  // Show close hint pointing to status bar terminal icon
+  useEffect(() => {
+    if (!animationComplete) return;
+    setShowCloseHint(true);
+  }, [animationComplete]);
 
   // Scroll whenever lines change
   useEffect(() => {
@@ -201,6 +208,23 @@ function TerminalPanel({ isOpen, onToggle }: TerminalPanelProps) {
           </div>
         )}
       </div>
+    {showCloseHint && (
+      <div style={{
+        position: 'fixed',
+        bottom: '30px',
+        right: '20px',
+        background: 'var(--bg-elevated)',
+        border: '1px solid var(--border-color)',
+        borderRadius: '6px',
+        padding: '8px 12px',
+        fontSize: '12px',
+        color: 'var(--text-muted)',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+        zIndex: 1000,
+      }}>
+        Press the terminal icon in the status bar to close
+      </div>
+    )}
     </div>
   );
 }
