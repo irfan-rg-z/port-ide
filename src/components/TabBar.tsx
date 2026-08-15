@@ -3,11 +3,10 @@
 import React, { useCallback } from 'react';
 import { allFiles } from '@/data/fileSystem';
 import {
-  // ArrowLeftIcon,
-  // ArrowRightIcon,
   PlusIcon,
   SplitHorizontalIcon,
   CloseIcon,
+  SearchIcon,
 } from './Icons';
 
 // ============================================================
@@ -78,8 +77,11 @@ function TabBar({ openTabs, activeFileId, onTabClick, onTabClose }: TabBarProps)
         })}
       </div>
 
-      {/* Right Actions: +, split, maximize */}
+      {/* Right Actions: search, +, split, maximize */}
       <div className="tabbar-actions">
+        <button className="tabbar-action-btn" title="Search files (⌘K)" aria-label="Search files">
+          <SearchIcon size={14} />
+        </button>
         <button className="tabbar-action-btn" title="New file" aria-label="New file">
           <PlusIcon size={14} />
         </button>
@@ -93,5 +95,6 @@ function TabBar({ openTabs, activeFileId, onTabClick, onTabClose }: TabBarProps)
     </div>
   );
 }
+
 
 export default React.memo(TabBar);

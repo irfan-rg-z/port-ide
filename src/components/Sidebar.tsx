@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useCallback } from 'react';
 import { fileTree, type FileTreeNode, type FileType } from '@/data/fileSystem';
-import { FolderIcon, FolderOpenIcon, ChevronRight, getFileIconComponent } from './Icons';
+import { FolderIcon, FolderOpenIcon, ChevronRight, getFileIconComponent, getFolderIconComponent } from './Icons';
 
 // ============================================================
 // Sidebar — File explorer with expandable tree
@@ -57,10 +57,7 @@ function Sidebar({ activeFileId, onFileClick, isOpen, isMobileOpen, onCloseMobil
             <span className={`folder-chevron${isExpanded ? ' open' : ''}`}>
               <ChevronRight size={11} />
             </span>
-            {isExpanded
-              ? <FolderOpenIcon size={15} />
-              : <FolderIcon size={15} />
-            }
+            {getFolderIconComponent(node.name, isExpanded, 15)}
             <span>{node.name}</span>
           </div>
           {isExpanded && node.children?.map(child => renderNode(child, depth + 1))}

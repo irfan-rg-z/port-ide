@@ -100,6 +100,40 @@
   font-size: 12px;
 }
 
+.titlebar-avatar-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.titlebar-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text-primary);
+  user-select: none;
+}
+
+.titlebar-avatar-dot {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #5ac1fe;
+  border: 1.5px solid var(--bg-titlebar);
+}
+
 .mobile-menu-btn {
   display: none;
   background: none;
@@ -755,7 +789,9 @@
 }
 
 .statusbar-btn.active {
-  color: var(--text-primary);
+  color: #5ac1fe;
+  background: none;
+  border: none;
 }
 
 .statusbar-btn.statusbar-success {
@@ -766,16 +802,30 @@
   color: var(--syn-string);
 }
 
-.statusbar-separator {
+.statusbar-divider {
   width: 1px;
-  height: 14px;
-  background: var(--border-color);
-  margin: 0 4px;
+  height: 12px;
+  background: var(--border-subtle);
+  margin: 0 3px;
+  opacity: 0.8;
 }
 
-.statusbar-zed-icon {
-  opacity: 0.5;
+.statusbar-zed-label {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--text-muted);
+  font-size: 11px;
+  margin-left: 2px;
+  margin-right: 2px;
 }
+
+.statusbar-lang-label {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 10px;
+  letter-spacing: 0.3px;
+}
+
 
 /* ── Command Palette ───────────────────────────────────────── */
 .command-palette-overlay {

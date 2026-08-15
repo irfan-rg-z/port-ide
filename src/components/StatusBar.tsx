@@ -9,18 +9,12 @@ import {
   BoltIcon,
   CheckIcon,
   CollaboratorsIcon,
-  ZedLogoIcon,
   TerminalIcon,
   StarIcon,
   ListIcon,
+  DebugIcon,
   SplitHorizontalIcon,
 } from './Icons';
-
-// ============================================================
-// StatusBar — Bottom bar matching ZED's actual layout
-// Left: panel toggles (file tree, git, outline, extensions, search, AI, diagnostics)
-// Right: cursor pos, language, zed icon, screen, collaborators, star, split
-// ============================================================
 
 interface StatusBarProps {
   activeFileName: string;
@@ -64,9 +58,11 @@ function StatusBar({
           <ListIcon size={14} />
         </button>
 
-        <button className="statusbar-btn" title="Extensions">
-          <ExtensionsIcon size={14} />
+        <button className="statusbar-btn" title="Debugger">
+          <DebugIcon size={14} />
         </button>
+
+        <span className="statusbar-divider" />
 
         <button className="statusbar-btn" title="Search (⌘K)">
           <SearchIcon size={14} />
@@ -87,13 +83,15 @@ function StatusBar({
           {cursorLine}:{cursorCol}
         </span>
 
-        <span className="statusbar-item" title="File language">
+        <span className="statusbar-item statusbar-lang-label" title="File language">
           {activeFileType}
         </span>
 
-        <span className="statusbar-item statusbar-zed-icon" title="Zed">
-          <ZedLogoIcon size={14} />
+        <span className="statusbar-item statusbar-zed-label" title="Zed Predict">
+          Z»
         </span>
+
+        <span className="statusbar-divider" />
 
         <button
           className={`statusbar-btn${terminalOpen ? ' active' : ''}`}
@@ -104,13 +102,17 @@ function StatusBar({
           <TerminalIcon size={14} />
         </button>
 
+        <span className="statusbar-divider" />
+
         <button className="statusbar-btn" title="Collaborators">
           <CollaboratorsIcon size={14} />
         </button>
 
-        <button className="statusbar-btn" title="Settings">
+        <button className="statusbar-btn" title="Assistant / Pin">
           <StarIcon size={14} />
         </button>
+
+        <span className="statusbar-divider" />
 
         <button className="statusbar-btn" title="Split View">
           <SplitHorizontalIcon size={14} />
@@ -119,5 +121,6 @@ function StatusBar({
     </div>
   );
 }
+
 
 export default React.memo(StatusBar);

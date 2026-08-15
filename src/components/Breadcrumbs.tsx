@@ -38,12 +38,6 @@ function Breadcrumbs({ filePath }: BreadcrumbsProps) {
         ))}
       </div>
 
-      {/* Right-side actions */}
-      <div className="breadcrumbs-actions" aria-hidden="true">
-        <button className="breadcrumbs-action-btn" title="Search in file">
-          <SearchIcon size={13} color="var(--text-muted)" />
-        </button>
-      </div>
     </div>
   );
 }
