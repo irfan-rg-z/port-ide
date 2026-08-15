@@ -1,0 +1,187 @@
+/* ============================================================
+   GLOBALS.CSS — ZED Ayu Darker Design System
+   Source: ~/Library/Application Support/Zed/extensions/installed/ayu-darker/themes/ayu-darker.json
+   ============================================================ */
+
+/* ── CSS Custom Properties ─────────────────────────────────── */
+:root {
+  /* ── Backgrounds — exact Ayu Darker token values ─────────── */
+  --bg-primary:    #080808;   /* editor.background / tab.active_background / toolbar.background */
+  --bg-secondary:  #121212;   /* title_bar.background / status_bar.background / tab_bar.background / tab.inactive_background / panel.background */
+  --bg-elevated:   #1f2127;   /* surface.background / element.background */
+  --bg-titlebar:   #121212;   /* title_bar.background / status_bar.background */
+  --bg-hover:      #2d2f34;   /* element.hover / ghost_element.hover */
+  --bg-active:     #3e4043;   /* element.active / ghost_element.active */
+  --bg-selection:  #5ac1fe3d; /* player[0].selection */
+
+  /* ── Text — exact Ayu Darker token values ─────────────────── */
+  --text-primary:  #bfbdb6;   /* text / editor.foreground */
+  --text-muted:    #8a8986;   /* text.muted / icon.muted */
+  --text-disabled: #696a6a;   /* text.disabled */
+  --text-accent:   #5ac1fe;   /* text.accent */
+
+  /* ── Borders — exact Ayu Darker token values ──────────────── */
+  --border-color:  #ffffff15; /* border — very subtle white tint */
+  --border-subtle: #2d2f34;   /* border.variant */
+  --border-focus:  #1b4a6e;   /* border.focused */
+
+  /* ── Syntax — exact Ayu Darker syntax token values ────────── */
+  --syn-keyword:   #ff7733;   /* keyword */
+  --syn-string:    #a9d94b;   /* string */
+  --syn-function:  #ffb454;   /* function */
+  --syn-type:      #59b4c2;   /* type */
+  --syn-comment:   #5c67738c; /* comment */
+  --syn-constant:  #ffee99;   /* constant */
+  --syn-operator:  #fe8f40;   /* operator */
+  --syn-variable:  #bfbdb6;   /* variable */
+  --syn-property:  #5ac1fe;   /* property */
+  --syn-number:    #d2a6ff;   /* number */
+  --syn-boolean:   #d2a6ff;   /* boolean */
+
+  /* ── Editor line numbers ───────────────────────────────────── */
+  --line-number-color:        #bfbdb659; /* editor.line_number */
+  --line-number-active-color: #bfbdb6;   /* editor.active_line_number */
+
+  /* ── Typography ───────────────────────────────────────────── */
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* ── Layout dimensions ────────────────────────────────────── */
+  --titlebar-height:   38px;
+  --tabbar-height:     36px;
+  --statusbar-height:  24px;
+  --sidebar-width:     240px;
+  --line-number-width: 50px;
+  --breadcrumb-height: 28px;
+
+  /* ── Editor settings ──────────────────────────────────────── */
+  --editor-font-size:   14px;
+  --editor-line-height: 1.65;
+  --ui-font-size:       12px;
+}
+
+
+/* ── Global Reset ──────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--editor-font-size);
+  line-height: var(--editor-line-height);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Selection ─────────────────────────────────────────────── */
+::selection {
+  background-color: var(--bg-selection);
+  color: var(--text-primary);
+}
+
+/* ── Scrollbar — Standard ──────────────────────────────────── */
+* {
+  scrollbar-color: var(--text-muted) var(--bg-primary);
+  scrollbar-width: thin;
+}
+
+/* ── Scrollbar — WebKit Fallback ───────────────────────────── */
+@supports not (scrollbar-color: auto) {
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--bg-primary);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--text-muted);
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--text-accent);
+  }
+}
+
+/* ── Syntax Highlighting Classes ───────────────────────────── */
+.syn-keyword {
+  color: var(--syn-keyword);
+}
+
+.syn-string {
+  color: var(--syn-string);
+}
+
+.syn-function {
+  color: var(--syn-function);
+}
+
+.syn-type {
+  color: var(--syn-type);
+}
+
+.syn-comment {
+  color: var(--syn-comment);
+  font-style: italic;
+}
+
+.syn-constant {
+  color: var(--syn-constant);
+}
+
+.syn-operator {
+  color: var(--syn-operator);
+}
+
+.syn-variable {
+  color: var(--syn-variable);
+}
+
+.syn-property {
+  color: var(--syn-property);
+}
+
+/* ── Reduced Motion ────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── Focus Visible ─────────────────────────────────────────── */
+:focus-visible {
+  outline: 1px solid var(--syn-type);
+  outline-offset: 2px;
+}
+
+/* ── KBD element ───────────────────────────────────────────── */
+kbd {
+  display: inline-block;
+  padding: 2px 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  color: var(--text-primary);
+}
