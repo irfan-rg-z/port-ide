@@ -35,16 +35,19 @@ function TerminalPanel({ isOpen, onToggle }: TerminalPanelProps) {
     }
   }, []);
 
-  // Type a command character by character
-  const typeCommand = useCallback((command: string): Promise<void> => {
+  // Type a command character by character — fixed closure capture
+  const typeCommand = useCallback((cmd: string): Promise<void> => {
+    const command = cmd; // capture locally to avoid any closure issues
     return new Promise((resolve) => {
       let charIndex = 0;
+      const len = command.length;
       setIsTyping(true);
       setCurrentCommand('');
 
       const typeInterval = setInterval(() => {
-        if (charIndex < command.length) {
-          setCurrentCommand(prev => prev + command[charIndex]);
+        if (charIndex < len) {
+          const ch = command[charIndex];
+          setCurrentCommand(prev => prev + (ch ?? ''));
           charIndex++;
           scrollToBottom();
         } else {
@@ -52,7 +55,7 @@ function TerminalPanel({ isOpen, onToggle }: TerminalPanelProps) {
           setIsTyping(false);
           resolve();
         }
-      }, 45 + Math.random() * 35); // Slightly randomized typing speed
+      }, 45 + Math.random() * 35);
     });
   }, [scrollToBottom]);
 
@@ -104,9 +107,18 @@ function TerminalPanel({ isOpen, onToggle }: TerminalPanelProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="terminal-panel">
+    <div
+      className="terminal-panel"
+      style={{
+        height: '16rem',
+        maxHeight: '16rem',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+      }}
+    >
       {/* Terminal tab bar */}
-      <div className="terminal-tabs">
+      <div className="terminal-tabs" style={{ flexShrink: 0 }}>
         <div className="terminal-tab active">
           <TerminalIcon size={12} />
           <span>terminal — zsh</span>
@@ -125,11 +137,20 @@ function TerminalPanel({ isOpen, onToggle }: TerminalPanelProps) {
         </button>
       </div>
 
-      {/* Terminal body */}
-      <div className="terminal-body" ref={terminalBodyRef}>
+      {/* Terminal body — fixed height, scrollable */}
+      <div
+        className="terminal-body"
+        ref={terminalBodyRef}
+        style={{
+          flex: '1 1 auto',
+          minHeight: 0,
+          overflow: 'auto',
+          padding: '8px 16px 2.5rem 16px',
+        }}
+      >
         {/* Welcome message */}
         <div className="terminal-welcome">
-          <span className="terminal-output">Welcome to irfan-portfolio v2.0.0</span>
+          <span className="terminal-output">Welcome to irfan-portfolio v3.0.0</span>
         </div>
         <div className="terminal-line-blank">&nbsp;</div>
 
@@ -139,12 +160,9 @@ function TerminalPanel({ isOpen, onToggle }: TerminalPanelProps) {
             return <div key={i} className="terminal-line-blank">&nbsp;</div>;
           }
           if (line.type === 'prompt') {
-            // The prompt line and command are on the same visual line
-            // We render prompt + command together in the next iteration
             return null;
           }
           if (line.type === 'command') {
-            // Find the prompt line right before this command
             const promptLine = renderedLines[i - 1];
             return (
               <div key={i} className="terminal-line">
@@ -155,7 +173,6 @@ function TerminalPanel({ isOpen, onToggle }: TerminalPanelProps) {
               </div>
             );
           }
-          // Output line
           return (
             <div key={i} className="terminal-line">
               <span className="terminal-output">{line.text}</span>

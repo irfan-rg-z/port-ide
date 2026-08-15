@@ -232,6 +232,17 @@ export const FileTreeIcon: React.FC<IconProps> = ({ size = 16, className }) => (
   </svg>
 );
 
+// git_worktree.svg
+export const GitWorktreeIcon: React.FC<IconProps> = ({ size = 12, className }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" className={className} aria-hidden="true">
+    <path d="M7.78314 8.0003L12.3252 3.45825" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M9.49899 9.71719L12.3237 12.5419" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M3.25763 8.0003H7.77134" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M12.7424 6.47908V3.04047H9.3038" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M9.30225 12.9595H12.7409V9.52094" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+
 // git_branch.svg
 export const GitBranchIcon: React.FC<IconProps> = ({ size = 16, className }) => (
   <svg width={size} height={size} viewBox="0 0 16 16" fill="none" className={className} aria-hidden="true">

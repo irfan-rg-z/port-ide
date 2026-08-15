@@ -6,60 +6,41 @@
 export interface TerminalEntry {
   command: string;
   output: string[];
-  delay?: number; // ms delay before typing this command
+  delay?: number;
 }
 
 export const terminalSequence: TerminalEntry[] = [
   {
-    command: 'whoami',
+    command: 'info',
     output: [
       'Irfan Gulagundi',
-      'SDE-1 Frontend Developer @ Zinier Inc.',
-      'CS Graduate — SDM Institute of Technology, Dharwad',
+      'Full‑Stack Engineer — 2026 B.Tech CS Grad',
+    ],
+    delay: 600,
+  },
+  {
+    command: 'cat profile.json',
+    output: [
+      '{',
+      '  "role": "Full‑Stack Engineer",',
+      '  "focus": ["Type‑safe full‑stack", "ML pipelines", "Design systems"],',
+      '  "status": "open_to_roles",',
+      '  "location": "Bengaluru / Remote"',
+      '}',
     ],
     delay: 800,
   },
   {
-    command: 'cat skills.txt',
+    command: 'cat contact.txt',
     output: [
-      '┌─────────────────────────────────────────┐',
-      '│  Languages:  JS • TS • Python • Java    │',
-      '│  Frontend:   React • Next.js • CSS      │',
-      '│  Backend:    Node • Express • PostgreSQL │',
-      '│  Cloud:      AWS • GCP • Vercel          │',
-      '│  Tools:      Git • Docker • Linux        │',
-      '└─────────────────────────────────────────┘',
+      'Email:      irfanrgulagundi@gmail.com',
+      'GitHub:     https://github.com/irfan-rg',
+      'LinkedIn:   https://linkedin.com/in/irfanrg',
+      'Portfolio:  https://irfanrg.dev',
     ],
-    delay: 1200,
-  },
-  {
-    command: 'ls projects/',
-    output: [
-      'caliber/          inkwell/          swift-dictionary/',
-      'f1-predictor/     qube-ai/          xo-store/',
-      'birthday-present/',
-    ],
-    delay: 1000,
-  },
-  {
-    command: 'echo $STATUS',
-    output: [
-      '🏢 Working at Zinier Inc. — building the future of field service management',
-    ],
-    delay: 1500,
-  },
-  {
-    command: 'cat contact.md',
-    output: [
-      '📧  irfanrgulagundi@gmail.com',
-      '🐙  github.com/irfangulagundi',
-      '💼  linkedin.com/in/irfangulagundi',
-      '🌐  irfanrg.dev',
-    ],
-    delay: 1200,
+    delay: 600,
   },
 ];
 
-// Terminal prompt prefix
 export const TERMINAL_PROMPT = 'irfan@portfolio';
 export const TERMINAL_CWD = '~/irfan-portfolio';

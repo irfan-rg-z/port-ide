@@ -98,7 +98,6 @@ function Sidebar({ activeFileId, onFileClick, isOpen, isMobileOpen, onCloseMobil
         role="tree"
         aria-label="File Explorer"
       >
-        <div className="sidebar-header">Explorer</div>
         {fileTree.map(node => renderNode(node, 0))}
       </aside>
     </>
