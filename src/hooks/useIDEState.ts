@@ -22,7 +22,7 @@ export function useIDEState() {
     activeFileId: DEFAULT_FILE_ID,
     openTabs: [...DEFAULT_OPEN_TABS],
     sidebarOpen: true,
-    terminalOpen: true,
+    terminalOpen: false,
     commandPaletteOpen: false,
     mobileSidebarOpen: false,
   });

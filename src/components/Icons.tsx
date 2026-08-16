@@ -516,4 +516,19 @@ export const TagIcon: React.FC<IconProps> = ({ size = defaultProps.size, color =
   </svg>
 );
 
+export const FileIcon: React.FC<IconProps> = ({ size = defaultProps.size, color = 'currentColor', className }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke={color} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M3 1v14h10V5l-4-4H3z" />
+    <path d="M7 1v4h4" />
+  </svg>
+);
+
+export const UserIcon: React.FC<IconProps> = ({ size = defaultProps.size, color = 'currentColor', className }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke={color} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M8 9a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" />
+    <path d="M3 15a5 5 0 0 1 10 0" />
+    <path d="M11.2 10.8a4 4 0 0 0 0-7.6" />
+  </svg>
+);
+
 

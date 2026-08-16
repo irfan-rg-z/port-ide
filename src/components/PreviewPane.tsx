@@ -1,17 +1,13 @@
 'use client';
 
 import React from 'react';
-import { allFiles, type VirtualFile, type Token } from '@/data/fileSystem';
+import { allFiles, type VirtualFile, type Token, type CodeLine } from '@/data/fileSystem';
 import { contactFile } from '@/data/fileSystem';
 import {
   BuildingIcon,
   GraduationIcon,
-  LeafIcon,
   ZapIcon,
-  PaletteIcon,
-  MailIcon,
   GithubIcon,
-  LinkedinIcon,
   GlobeIcon,
   LaptopIcon,
   CloudIcon,
@@ -19,13 +15,18 @@ import {
   WrenchIcon,
   BoxIcon,
   TagIcon,
-  CheckIcon
+  CheckIcon,
+  TerminalIcon,
+  FolderIcon,
+  FileIcon,
+  UserIcon,
+  PaletteIcon,
 } from './Icons';
 
 // ============================================================
-// PreviewPane — Rich rendered preview of file content
-// Like VS Code's markdown preview or ZED's rendered view.
+// PreviewPane — Rendered preview of file content
 // Each file type gets a custom, beautifully rendered layout.
+// Uses tokenized data directly from fileSystem.ts for accuracy.
 // ============================================================
 
 interface PreviewPaneProps {
@@ -45,515 +46,661 @@ function extractString(tokens: Token[]): string {
     .join('');
 }
 
-// ── README Preview ────────────────────────────────────────────
+// Helper: extract value from a line by property name
+function extractPropertyValue(lines: CodeLine[], propName: string): string | null {
+  let inInterface = false;
+  for (const line of lines) {
+    const text = extractText(line.tokens);
+    if (text.includes('interface ')) { inInterface = true; continue; }
+    if (inInterface && text.includes('}')) { inInterface = false; continue; }
+    if (inInterface) continue;
+
+    const propIdx = line.tokens.findIndex(t => t.type === 'property' && t.text === propName);
+    if (propIdx >= 0) {
+      const valueTokens = line.tokens.slice(propIdx + 1);
+      const str = extractString(valueTokens);
+      if (str) return str;
+      const constToken = valueTokens.find(t => t.type === 'constant');
+      if (constToken) return constToken.text.replace(/^["']|["']$/g, '');
+    }
+  }
+  return null;
+}
+
+// Helper: extract all string values from tokens (for arrays)
+function extractAllStrings(tokens: Token[]): string[] {
+  return tokens
+    .filter(t => t.type === 'string')
+    .map(t => t.text.replace(/^["']|["']$/g, ''))
+    .filter(s => s.length > 0);
+}
+
+// ── Terminal Command Output Component ────────────────────────
+function TerminalOutput({ command, output, icon }: { command: string; output: string | React.ReactNode; icon?: React.ReactNode }) {
+  return (
+    <div className="terminal-output-block" style={{ marginBottom: '16px' }}>
+      <div className="terminal-command-line" style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+        {icon || <TerminalIcon size={14} />}
+        <span style={{ color: 'var(--syn-comment)' }}>$</span>
+        <span style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontSize: '13px' }}>{command}</span>
+      </div>
+      <div style={{ paddingLeft: '16px', borderLeft: '1px solid var(--border-color)', marginLeft: '8px' }}>
+        {typeof output === 'string' ? (
+          <pre style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: '13px', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{output}</pre>
+        ) : output}
+      </div>
+    </div>
+  );
+}
+
+// ── Tag / Badge Component ──────────────────────────────────────
+function Tag({ children, color = 'var(--syn-type)', bg = 'var(--bg-secondary)' }: { children: React.ReactNode; color?: string; bg?: string }) {
+  return (
+    <span style={{
+      padding: '2px 8px',
+      borderRadius: '4px',
+      background: bg,
+      border: '1px solid var(--border-color)',
+      fontSize: '11px',
+      fontWeight: 500,
+      color: color,
+      fontFamily: 'var(--font-mono)',
+      textTransform: 'uppercase',
+      letterSpacing: '0.5px',
+    }}>{children}</span>
+  );
+}
+
+// ── README Preview — Terminal Dashboard ───────────────────────
 function ReadmePreview() {
-  const aboutFile = allFiles['about'];
   const readmeFile = allFiles['readme'];
-  const aboutText = aboutFile ? aboutFile.content.map(l => extractText(l.tokens)).join('\n') : '';
   const readmeText = readmeFile ? readmeFile.content.map(l => extractText(l.tokens)).join('\n') : '';
 
-  const roleMatch = aboutText.match(/role:\s*["']([^"']+)["']/);
-  const companyMatch = aboutText.match(/company:\s*["']([^"']+)["']/);
-  const nameMatch = aboutText.match(/name:\s*["']([^"']+)["']/);
-  const degreeMatch = aboutText.match(/degree:\s*["']([^"']+)["']/);
-  const instMatch = aboutText.match(/institution:\s*["']([^"']+)["']/);
-
-  const name = nameMatch ? nameMatch[1] : 'Irfan Gulagundi';
-  const role = roleMatch ? roleMatch[1] : 'Full-Stack Developer';
-  const company = companyMatch ? companyMatch[1] : 'Zinier Inc.';
-  const education = `${degreeMatch ? degreeMatch[1] : 'B.E. Computer Science'} — ${instMatch ? instMatch[1] : 'SDM Institute of Technology, Dharwad'}`;
-
-  // Extract projects list from readme text
-  const projectsSection = readmeText.split('Projects I Built')[1]?.split('Contact')[0] || '';
+  // Parse projects from README
+  const projectsSection = readmeText.split('## Selected Work')[1]?.split('## Contact')[0] || '';
   const projectLines = projectsSection.split('\n').filter(l => l.trim().startsWith('-')).map(l => l.replace(/^- /, '').trim());
+
+  const projects = projectLines.slice(0, 6).map(p => {
+    const match = p.match(/^([^—–]+)\s*[—–]\s*(.+)/);
+    if (match) {
+      return { name: match[1].trim(), details: match[2].trim() };
+    }
+    return { name: p, details: '' };
+  });
+
+  // Parse contact links
+  const emailMatch = readmeText.match(/📧\s*([^\s]+)/);
+  const githubMatch = readmeText.match(/🐙\s*([^\s]+)/);
+  const linkedinMatch = readmeText.match(/💼\s*([^\s]+)/);
+  const portfolioMatch = readmeText.match(/🌐\s*([^\s]+)/);
+
+  const email = emailMatch ? emailMatch[1] : 'irfanrgulagundi@gmail.com';
+  const github = githubMatch ? githubMatch[1] : 'github.com/irfan-rg';
+  const linkedin = linkedinMatch ? linkedinMatch[1] : 'linkedin.com/in/irfanrg';
+  const portfolio = portfolioMatch ? portfolioMatch[1] : 'irfanrg.dev';
 
   return (
     <div className="preview-content preview-readme">
-      <div className="preview-hero">
-        <div className="preview-avatar" style={{ overflow: 'hidden' }}>
-          <img src="/placeholder-profile.png" alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      <div className="terminal-dashboard" style={{ maxWidth: '800px', margin: '0 auto' }}>
+        <div className="terminal-header" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '24px', paddingBottom: '12px', borderBottom: '1px solid var(--border-color)' }}>
+          <TerminalIcon size={20} color="var(--syn-string)" />
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', color: 'var(--syn-boolean)' }}>irfan@portfolio:~$</span>
+          <span style={{ color: 'var(--syn-function)', fontFamily: 'var(--font-mono)', fontSize: '13px' }}>npm start</span>
         </div>
-        <h1 className="preview-title">Hey, I&apos;m {name.split(' ')[0]} 👋</h1>
-        <p className="preview-subtitle">
-          {role} crafting modern web experiences<br />
-          with clean architecture and type-safe systems.
-        </p>
-        <div className="preview-badges">
-          <span className="preview-badge badge-green">{role}</span>
-          <span className="preview-badge badge-blue">{company}</span>
-        </div>
-      </div>
 
-      <div className="preview-divider" />
+        <TerminalOutput
+          command="who-am-i?"
+          output={
+            <pre style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: '13px', lineHeight: 1.6 }}>
+              <span style={{ color: 'var(--syn-operator)', fontWeight: 600 }}>Irfan Gulagundi</span>
+            </pre>
+          }
+          icon={<UserIcon size={14} />}
+        />
 
-      <div className="preview-section">
-        <h2 className="preview-section-title">Current Status</h2>
-        <div className="preview-info-grid">
-          <div className="preview-info-item">
-            <span className="preview-info-icon"><BuildingIcon size={16} /></span>
-            <div>
-              <span className="preview-info-label">Current</span>
-              <span className="preview-info-value">{company}</span>
+        <TerminalOutput
+          command="cat profile.json"
+          icon={<FileIcon size={14} />}
+          output={
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', lineHeight: 1.8 }}>
+              <span style={{ color: 'var(--syn-string)' }}>"role"</span>: <span style={{ color: 'var(--syn-type)' }}>"SDE-1 Frontend Developer"</span>,
+              <br />
+              <span style={{ color: 'var(--syn-string)' }}>"company"</span>: <span style={{ color: 'var(--syn-type)' }}>"Zinier Inc."</span>,
+              <br />
+              <span style={{ color: 'var(--syn-string)' }}>"location"</span>: <span style={{ color: 'var(--syn-type)' }}>"Bengaluru, India"</span>
             </div>
-          </div>
-          <div className="preview-info-item">
-            <span className="preview-info-icon"><GraduationIcon size={16} /></span>
-            <div>
-              <span className="preview-info-label">Education</span>
-              <span className="preview-info-value">{education}</span>
-            </div>
-          </div>
-          <div className="preview-info-item">
-            <span className="preview-info-icon"><LeafIcon size={16} /></span>
-            <div>
-              <span className="preview-info-label">Focus</span>
-              <span className="preview-info-value">Type-safe full-stack & AI pipelines</span>
-            </div>
-          </div>
-        </div>
-      </div>
+          }
+        />
 
-      <div className="preview-section">
-        <h2 className="preview-section-title">Projects I Built</h2>
-        <ul className="preview-list">
-          {projectLines.length > 0 ? projectLines.map((p, i) => (
-            <li key={i}><span style={{marginRight: '8px', color: 'var(--text-muted)'}}><BoxIcon size={14}/></span> {p}</li>
-          )) : (
-            <>
-              <li><span style={{marginRight: '8px', color: 'var(--text-muted)'}}><BoxIcon size={14}/></span> Clean, maintainable architecture</li>
-              <li><span style={{marginRight: '8px', color: 'var(--syn-keyword)'}}><ZapIcon size={14}/></span> High-performance, smooth user experiences</li>
-            </>
-          )}
-        </ul>
-      </div>
+        <TerminalOutput
+          command="ls projects/"
+          icon={<FolderIcon size={14} />}
+          output={
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              {projects.map((p, i) => {
+                const urlMatch = p.details.match(/(https?:\/\/[^\s]+)/);
+                const url = urlMatch ? urlMatch[1] : null;
+                const desc = url ? p.details.replace(url, '').replace(/\.\s*$/, '').trim() : p.details;
+                return (
+                  <div key={i} style={{
+                    background: 'var(--bg-primary)',
+                    borderRadius: '6px',
+                    padding: '12px 14px',
+                    border: '1px solid var(--border-color)',
+                  }}>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', color: 'var(--text-primary)', fontWeight: 500, marginBottom: '4px' }}>
+                      {p.name}
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                      {desc}
+                    </div>
+                    {url && (
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--syn-string)', marginTop: '6px' }}>
+                        {url.replace('https://', '')}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          }
+        />
 
-      <div className="preview-section">
-        <h2 className="preview-section-title">Contact</h2>
-        <div className="preview-links">
-          <a href="mailto:irfanrgulagundi@gmail.com" className="preview-link" target="_blank" rel="noopener noreferrer">
-            <span style={{display: 'flex'}}><MailIcon size={14} /></span> irfanrgulagundi@gmail.com
-          </a>
-          <a href="https://github.com/irfan-rg" className="preview-link" target="_blank" rel="noopener noreferrer">
-            <span style={{display: 'flex'}}><GithubIcon size={14} /></span> github.com/irfan-rg
-          </a>
-          <a href="https://linkedin.com/in/irfanrg" className="preview-link" target="_blank" rel="noopener noreferrer">
-            <span style={{display: 'flex'}}><LinkedinIcon size={14} /></span> linkedin.com/in/irfanrg
-          </a>
-        </div>
+        <TerminalOutput
+          command="echo $contact"
+          icon={<GlobeIcon size={14} />}
+          output={
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', lineHeight: 2 }}>
+              <div style={{ color: 'var(--syn-type)' }}>{email}</div>
+              <div style={{ color: 'var(--syn-function)' }}>{github}</div>
+              <div style={{ color: 'var(--syn-function)' }}>{linkedin}</div>
+              <div style={{ color: 'var(--syn-string)' }}>{portfolio}</div>
+            </div>
+          }
+        />
       </div>
     </div>
   );
 }
 
-// ── About Preview ─────────────────────────────────────────────
+// ── About Preview — Terminal Profile ───────────────────────────
 function AboutPreview() {
   const aboutFile = allFiles['about'];
-  const aboutText = aboutFile ? aboutFile.content.map(l => extractText(l.tokens)).join('\n') : '';
-  const nameMatch = aboutText.match(/name:\s*["']([^"']+)["']/);
-  const roleMatch = aboutText.match(/role:\s*["']([^"']+)["']/);
-  const companyMatch = aboutText.match(/company:\s*["']([^"']+)["']/);
-  const degreeMatch = aboutText.match(/degree:\s*["']([^"']+)["']/);
-  const instMatch = aboutText.match(/institution:\s*["']([^"']+)["']/);
-  const philMatch = aboutText.match(/philosophy:\s*["']([^"']+)["']/);
+  if (!aboutFile) return null;
 
-  const name = nameMatch ? nameMatch[1] : 'Irfan Gulagundi';
-  const role = roleMatch ? roleMatch[1] : 'SDE-1 Frontend Developer';
-  const company = companyMatch ? companyMatch[1] : 'Zinier Inc.';
-  const degree = degreeMatch ? degreeMatch[1] : 'B.E. Computer Science';
-  const institution = instMatch ? instMatch[1] : 'SDM Institute of Technology';
-  const philosophy = philMatch ? philMatch[1] : 'Build small, composable pieces, ship early, iterate with real users.';
+  const name = extractPropertyValue(aboutFile.content, 'name') || 'Irfan Gulagundi';
+  const role = extractPropertyValue(aboutFile.content, 'role') || 'SDE-1 Frontend Developer';
+  const company = extractPropertyValue(aboutFile.content, 'company') || 'Zinier Inc.';
+  const location = extractPropertyValue(aboutFile.content, 'location') || 'Bengaluru, India';
+  const degree = extractPropertyValue(aboutFile.content, 'degree') || 'B.E. Computer Science';
+  const institution = extractPropertyValue(aboutFile.content, 'institution') || 'SDM Institute of Technology';
+  const graduated = extractPropertyValue(aboutFile.content, 'graduated') || 'May 2026';
 
-  // Passions from about.ts
-  const passions = [
-    'End-to-end type-safe full-stack',
-    'ML side-projects',
-    'Design-system thinking',
-    'Open-source maintainer'
-  ];
+  // Extract education location from the education sub-object specifically
+  let educationLocation = 'Ujire, India';
+  let inEducation = false;
+  for (const line of aboutFile.content) {
+    const text = extractText(line.tokens);
+    if (text.includes('education') && text.includes('{')) { inEducation = true; continue; }
+    if (inEducation && text.includes('}')) { break; }
+    if (inEducation) {
+      const locIdx = line.tokens.findIndex(t => t.type === 'property' && t.text === 'location');
+      if (locIdx >= 0) {
+        const val = extractString(line.tokens.slice(locIdx + 1));
+        if (val) educationLocation = val;
+      }
+    }
+  }
+  const philosophy = extractPropertyValue(aboutFile.content, 'philosophy') || '';
+  const superpower = extractPropertyValue(aboutFile.content, 'superpower') || '';
+  const kryptonite = extractPropertyValue(aboutFile.content, 'kryptonite') || '';
+
+  // Extract interests array from tokens (skip interface definition)
+  const interests: string[] = [];
+  for (let i = 0; i < aboutFile.content.length; i++) {
+    const line = aboutFile.content[i];
+    const hasInterestsProp = line.tokens.some(t => t.type === 'property' && t.text === 'interests');
+    const hasOpenBracket = line.tokens.some(t => t.text === '[');
+    if (hasInterestsProp && hasOpenBracket) {
+      // Found the data interests array (not the interface) — collect strings until ]
+      for (let j = i; j < aboutFile.content.length; j++) {
+        const strTokens = aboutFile.content[j].tokens.filter(t => t.type === 'string');
+        for (const st of strTokens) {
+          interests.push(st.text.replace(/^["']|["']$/g, ''));
+        }
+        if (aboutFile.content[j].tokens.some(t => t.text === ']')) break;
+      }
+      break;
+    }
+  }
+
+  // Parse story paragraphs from comment block
+  const paragraphs: string[] = [];
+  let currentPara: string[] = [];
+  let inStory = false;
+
+  for (const line of aboutFile.content) {
+    const text = extractText(line.tokens);
+    if (text.includes('/**')) { inStory = true; continue; }
+    if (text.includes('*/')) { inStory = false; continue; }
+    if (inStory) {
+      const storyText = text.replace(/^\s*\*\s?/, '').trim();
+      if (storyText && storyText !== '*') {
+        currentPara.push(storyText);
+      } else if (!storyText && currentPara.length > 0) {
+        paragraphs.push(currentPara.join(' '));
+        currentPara = [];
+      }
+    }
+  }
+  if (currentPara.length > 0) paragraphs.push(currentPara.join(' '));
+
+  const storyTitle = paragraphs[0] || 'The human behind the commits';
+  const storyContent = paragraphs.slice(1);
 
   return (
     <div className="preview-content preview-about">
-      <div className="preview-section">
-        <span className="preview-tag">interface Developer</span>
-        <h1 className="preview-title" style={{ fontSize: '28px' }}>{name}</h1>
-        <p className="preview-role">{role} at <strong>{company}</strong></p>
-      </div>
+      <div style={{ maxWidth: '760px', margin: '0 auto', padding: '0 24px' }}>
 
-      <div className="preview-card">
-        <h3 className="preview-card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <GraduationIcon size={16} /> Education
-        </h3>
-        <p className="preview-card-text">{degree}</p>
-        <p className="preview-card-sub">{institution}, Dharwad, India</p>
-      </div>
-
-      <div className="preview-card">
-        <h3 className="preview-card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <ZapIcon size={16} /> Passions
-        </h3>
-        <div className="preview-tags-list">
-          {passions.map(p => <span key={p} className="preview-tag-item">{p}</span>)}
+        {/* ── Name Hero ── */}
+        <div style={{ marginBottom: '40px' }}>
+          <h1 style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: '32px',
+            fontWeight: 800,
+            margin: '0 0 8px',
+            color: 'var(--text-primary)',
+            letterSpacing: '-1px',
+          }}>{name}</h1>
+          <div style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: '15px',
+            color: 'var(--syn-comment)',
+          }}>
+            <span style={{ color: 'var(--syn-keyword)' }}>const</span>{' '}
+            <span style={{ color: 'var(--syn-type)' }}>developer</span>{' '}
+            <span style={{ color: 'var(--syn-operator)' }}>=</span>{' '}
+            <span style={{ color: 'var(--syn-string)' }}>&quot;{role.toLowerCase()}&quot;</span>
+          </div>
         </div>
-      </div>
 
-      <div className="preview-card">
-        <h3 className="preview-card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <BrainIcon size={16} /> Philosophy
-        </h3>
-        <blockquote className="preview-quote">
-          &ldquo;{philosophy}&rdquo;
-        </blockquote>
+        {/* ── Terminal Status Bar ── */}
+        <div style={{
+          background: 'var(--bg-secondary)',
+          borderRadius: '8px',
+          padding: '16px 20px',
+          marginBottom: '32px',
+          border: '1px solid var(--border-color)',
+        }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'baseline' }}>
+              <span style={{ color: 'var(--syn-string)', minWidth: '80px' }}>role</span>
+              <span style={{ color: 'var(--syn-comment)' }}>→</span>
+              <span style={{ color: 'var(--syn-type)' }}>{role}</span>
+            </div>
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'baseline' }}>
+              <span style={{ color: 'var(--syn-string)', minWidth: '80px' }}>company</span>
+              <span style={{ color: 'var(--syn-comment)' }}>→</span>
+              <span style={{ color: 'var(--syn-function)' }}>{company}</span>
+            </div>
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'baseline' }}>
+              <span style={{ color: 'var(--syn-string)', minWidth: '80px' }}>location</span>
+              <span style={{ color: 'var(--syn-comment)' }}>→</span>
+              <span style={{ color: 'var(--syn-constant)' }}>{location}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Story Section ── */}
+        <div style={{ marginBottom: '36px' }}>
+          <div style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: '12px',
+            color: 'var(--syn-comment)',
+            marginBottom: '16px',
+            textTransform: 'uppercase',
+            letterSpacing: '1px',
+          }}>
+            {'// '}{storyTitle}
+          </div>
+          {/* First two paragraphs side by side */}
+          {storyContent.length > 0 && (
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: storyContent.length >= 2 ? '1fr 1fr' : '1fr',
+              gap: '20px',
+              marginBottom: storyContent.length > 2 ? '20px' : '0',
+            }}>
+              {storyContent.slice(0, 2).map((para, i) => (
+                <div key={i} style={{
+                  fontFamily: 'var(--font-mono)',
+                  background: 'var(--bg-secondary)',
+                  borderRadius: '8px',
+                  padding: '20px',
+                  border: '1px solid var(--border-color)',
+                }}>
+                  <p style={{
+                    margin: '0',
+                    color: 'var(--text-secondary)',
+                    lineHeight: 1.5,
+                    fontSize: '15px',
+                  }}>{para}</p>
+                </div>
+              ))}
+            </div>
+          )}
+          {/* Third paragraph below both */}
+          {storyContent.length > 2 && (
+            <div style={{
+              fontFamily: 'var(--font-mono)',
+              background: 'var(--bg-secondary)',
+              borderRadius: '8px',
+              padding: '20px',
+              border: '1px solid var(--border-color)',
+            }}>
+              {storyContent.slice(2).map((para, i) => (
+                <p key={i + 2} style={{
+                  margin: i > 0 ? '12px 0 0' : '0',
+                  color: 'var(--text-secondary)',
+                  lineHeight: 1.5,
+                  fontSize: '15px',
+                }}>{para}</p>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* ── Education ── */}
+        <div style={{ marginBottom: '32px' }}>
+          <div style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: '12px',
+            color: 'var(--syn-comment)',
+            marginBottom: '14px',
+            textTransform: 'uppercase',
+            letterSpacing: '1px',
+          }}>education</div>
+          <div style={{
+            background: 'var(--bg-secondary)',
+            borderRadius: '8px',
+            border: '1px solid var(--border-color)',
+            overflow: 'hidden',
+          }}>
+            <div style={{
+              padding: '10px 16px',
+              background: 'rgba(255,255,255,0.03)',
+              borderBottom: '1px solid var(--border-color)',
+              fontFamily: 'var(--font-mono)',
+              fontSize: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+            }}>
+              <span style={{ color: 'var(--syn-comment)' }}>$</span>
+              <span style={{ color: 'var(--syn-function)' }}>cat</span>
+              <span style={{ color: 'var(--syn-string)' }}>education.json</span>
+            </div>
+            <div style={{ padding: '16px 20px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr', gap: '8px 16px', fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
+                <span style={{ color: 'var(--syn-comment)' }}>degree</span>
+                <span style={{ color: 'var(--syn-type)' }}>{degree}</span>
+                <span style={{ color: 'var(--syn-comment)' }}>school</span>
+                <span style={{ color: 'var(--syn-function)' }}>{institution}</span>
+                <span style={{ color: 'var(--syn-comment)' }}>where</span>
+                <span style={{ color: 'var(--syn-constant)' }}>{educationLocation}</span>
+                <span style={{ color: 'var(--syn-comment)' }}>year</span>
+                <span style={{ color: 'var(--syn-keyword)' }}>{graduated}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Interests ── */}
+        <div style={{ marginBottom: '32px' }}>
+          <div style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: '12px',
+            color: 'var(--syn-comment)',
+            marginBottom: '14px',
+            textTransform: 'uppercase',
+            letterSpacing: '1px',
+          }}>interests</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+            {interests.map((interest, i) => (
+              <div key={i} style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '13px',
+                padding: '8px 14px',
+                borderRadius: '6px',
+                background: 'var(--bg-secondary)',
+                color: 'var(--text-secondary)',
+                border: '1px solid var(--border-color)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}>
+                <span style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  background: 'var(--syn-comment)',
+                  flexShrink: 0,
+                }} />
+                {interest}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Superpower & Kryptonite ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '32px' }}>
+          <div style={{
+            background: 'var(--bg-secondary)',
+            borderRadius: '8px',
+            padding: '20px',
+            border: '1px solid var(--border-color)',
+            borderTop: '2px solid var(--syn-string)',
+          }}>
+            <div style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: '11px',
+              color: 'var(--syn-string)',
+              textTransform: 'uppercase',
+              letterSpacing: '1px',
+              marginBottom: '8px',
+            }}>superpower</div>
+            <p style={{
+              margin: '0',
+              color: 'var(--text-secondary)',
+              fontSize: '14px',
+              fontFamily: 'var(--font-mono)',
+              lineHeight: 1.6,
+            }}>{superpower}</p>
+          </div>
+          <div style={{
+            background: 'var(--bg-secondary)',
+            borderRadius: '8px',
+            padding: '20px',
+            border: '1px solid var(--border-color)',
+            borderTop: '2px solid var(--syn-keyword)',
+          }}>
+            <div style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: '11px',
+              color: 'var(--syn-keyword)',
+              textTransform: 'uppercase',
+              letterSpacing: '1px',
+              marginBottom: '8px',
+            }}>kryptonite</div>
+            <p style={{
+              margin: '0',
+              color: 'var(--text-secondary)',
+              fontSize: '14px',
+              fontFamily: 'var(--font-mono)',
+              lineHeight: 1.6,
+            }}>{kryptonite}</p>
+          </div>
+        </div>
+
+        {/* ── Closing Line ── */}
+        <div style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: '13px',
+          color: 'var(--syn-comment)',
+          textAlign: 'center',
+          padding: '20px 0 8px',
+          borderTop: '1px solid var(--border-color)',
+        }}>
+          Always learning. Always improving. One iteration at a time.
+        </div>
+
       </div>
     </div>
   );
 }
- 
-// ── Experience Preview ────────────────────────────────────────
+
+// ── Experience Preview — Readable Timeline ────────────────────
 function ExperiencePreview() {
   const expFile = allFiles['experience'];
-  let data: any = { experience: [], education: [] };
+  let data: { experience: any[]; education: any[] } = { experience: [], education: [] };
   try {
     const raw = expFile ? expFile.content.map(l => extractText(l.tokens)).join('\n') : '';
     data = JSON.parse(raw);
   } catch {}
 
+  const generateHash = (s: string) => s.split('').reduce((a, b) => (((a << 5) - a) + b.charCodeAt(0)) | 0, 0).toString(16).slice(0, 7);
+
   return (
-    <div className="preview-content preview-experience">
-      <h2 className="preview-section-title">Experience</h2>
-      <div className="preview-timeline">
-        {data.experience?.map((exp: any, idx: number) => (
-          <div key={idx} className="preview-timeline-item">
-            <div className={`preview-timeline-dot${idx===0?' active':''}`} />
-            <div className="preview-timeline-content">
-              <div className="preview-timeline-header">
-                <h3>{exp.company}</h3>
-                <span className="preview-badge badge-green">{exp.period?.includes('Present') ? 'Current' : exp.period}</span>
-              </div>
-              <p className="preview-timeline-role">{exp.role}</p>
-              <p className="preview-timeline-meta">{exp.location} · {exp.period}</p>
-              <p className="preview-timeline-desc">{exp.focus}</p>
-              {exp.metrics && (
-                <ul className="preview-highlights">
-                  {Object.entries(exp.metrics).map(([k,v]) => <li key={k}>{k}: {String(v)}</li>)}
-                </ul>
-              )}
-              {exp.stack && (
-                <div className="preview-tech-stack">
-                  {exp.stack.map((s:string)=><span key={s}>{s}</span>)}
+    <div className="preview-content preview-experience" style={{ maxWidth: '800px', margin: '0 auto' }}>
+      <div style={{ fontFamily: 'var(--font-mono)', color: 'var(--syn-keyword)', fontSize: '13px', marginBottom: '24px' }}>
+        <span style={{ color: 'var(--text-disabled)' }}>$</span> git log --oneline --decorateand 
+      </div>
+
+      {/* Experience Timeline */}
+      {data.experience?.map((exp, idx) => {
+        const isCurrent = exp.period?.includes('Present');
+        const shortHash = generateHash(exp.company + exp.role);
+        return (
+          <div key={idx} style={{ marginBottom: '24px', fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+              <span style={{
+                color: isCurrent ? 'var(--syn-string)' : 'var(--text-muted)',
+                minWidth: '80px',
+                whiteSpace: 'nowrap'
+              }}>
+                {shortHash}
+                {isCurrent && <span style={{ display: 'block', fontSize: '12px', color: 'var(--syn-constant)', marginTop: '2px', marginLeft: '6px'}}>● main</span>}
+              </span>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                  <span style={{ color: isCurrent ? 'var(--syn-string)' : 'var(--syn-type)', fontWeight: 500 }}>{exp.role}</span>
+                  <span style={{ color: 'var(--syn-property)' }}>@</span>
+                  <span style={{ color: 'var(--syn-function)' }}>{exp.company}</span>
                 </div>
-              )}
+                <div style={{ color: 'var(--text-muted)', fontSize: '12px', marginBottom: '8px' }}>
+                  {exp.location} · {exp.period}
+                </div>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '14px', lineHeight: 1.6, margin: 0 }}>{exp.description}</p>
+                {exp.highlights && exp.highlights.length > 0 && (
+                  <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    {exp.highlights.map((h: string, i: number) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--syn-operator)', fontSize: '12px' }}>
+                        <span>+</span> <span style={{ color: 'var(--text-muted)' }}>{h}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {exp.stack && exp.stack.length > 0 && (
+                  <div style={{ marginTop: '10px', display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                    {exp.stack.map((s: string) => (
+                      <Tag key={s} color="var(--text-muted)">{s}</Tag>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        ))}
+        );
+      })}
+
+      {/* Education Branch */}
+      <div style={{ marginTop: '24px', marginBottom: '8px', fontFamily: 'var(--font-mono)', fontSize: '13px', color: 'var(--syn-comment)' }}>
+        # Education branch
       </div>
 
-      <div className="preview-divider" />
-
-      <h2 className="preview-section-title">Education</h2>
-      <div className="preview-timeline">
-        {data.education?.map((edu:any, idx:number)=>(
-          <div key={idx} className="preview-timeline-item">
-            <div className="preview-timeline-dot" />
-            <div className="preview-timeline-content">
-              <h3>{edu.institution}</h3>
-              <p className="preview-timeline-role">{edu.degree}</p>
-              <p className="preview-timeline-meta">{edu.location} · {edu.period || ''}</p>
+      {data.education?.map((edu, idx) => {
+        const shortHash = generateHash(edu.institution);
+        return (
+          <div key={idx} style={{ marginBottom: '20px', fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+              <span style={{ color: 'var(--syn-function)', minWidth: '80px', whiteSpace: 'nowrap' }}>
+                {shortHash}
+              </span>
+              <div style={{ flex: 1 }}>
+                <div style={{ color: 'var(--syn-function)', marginBottom: '2px', fontWeight: 500 }}>{edu.degree}</div>
+                <div style={{ color: 'var(--syn-type)', fontSize: '12px' }}>{edu.institution}, {edu.location}</div>
+                <div style={{ color: 'var(--syn-comment)', fontSize: '12px' }}>{edu.period} • Graduated {edu.graduated}</div>
+              </div>
             </div>
           </div>
-        ))}
-      </div>
+        );
+      })}
     </div>
   );
 }
 
-// ── Skills Preview ────────────────────────────────────────────
+// ── Skills Preview — Readable Skill Tags ──────────────────────
 function SkillsPreview() {
-  const categories = [
-    {
-      title: 'Core Languages',
-      icon: <LaptopIcon size={16} />,
-      items: ['JavaScript', 'TypeScript', 'Python', 'Java', 'C/C++'],
-      color: 'var(--syn-keyword)',
-    },
-    {
-      title: 'Frontend Ecosystem',
-      icon: <PaletteIcon size={16} />,
-      items: ['React.js', 'Next.js', 'HTML5 / CSS3', 'Tailwind CSS', 'Framer Motion'],
-      color: 'var(--syn-type)',
-    },
-    {
-      title: 'Backend & Cloud',
-      icon: <CloudIcon size={16} />,
-      items: ['Node.js', 'Express', 'REST APIs', 'PostgreSQL', 'MongoDB', 'AWS', 'Google Cloud'],
-      color: 'var(--syn-string)',
-    },
-    {
-      title: 'Data & AI',
-      icon: <BrainIcon size={16} />,
-      items: ['Machine Learning', 'Predictive Modeling', 'Big Data (Hadoop, Spark)'],
-      color: 'var(--syn-constant)',
-    },
-    {
-      title: 'DevOps & Tools',
-      icon: <WrenchIcon size={16} />,
-      items: ['Git / GitHub', 'Docker', 'Vercel', 'Linux / Ubuntu', 'VS Code', 'Zed'],
-      color: 'var(--syn-operator)',
-    },
-  ];
+  const skillsFile = allFiles['skills'];
+  if (!skillsFile) return null;
 
-  return (
-    <div className="preview-content preview-skills">
-      <h2 className="preview-section-title">Technical Arsenal</h2>
-      <div className="preview-skills-grid">
-        {categories.map(cat => (
-          <div key={cat.title} className="preview-skill-card" style={{ '--accent': cat.color } as React.CSSProperties}>
-            <h3 className="preview-skill-title">
-              <span style={{display: 'flex'}}>{cat.icon}</span> {cat.title}
-            </h3>
-            <div className="preview-skill-items">
-              {cat.items.map(item => (
-                <span key={item} className="preview-skill-item">{item}</span>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+  // Parse skills from tokenized data
+  const raw = skillsFile.content.map(l => extractText(l.tokens)).join('\n');
+  const parsed: Array<{ label: string; items: string[] }> = [];
 
-// ── Project Preview (generic for all project files) ───────────
-function ProjectPreview({ file }: { file: VirtualFile }) {
-  const lines = file.content;
-  let projectName = file.name.replace('.tsx', '');
-  let description = '';
-  const highlights: string[] = [];
-  let techLine = '';
-
-  for (const line of lines) {
-    const text = extractText(line.tokens);
-    if (text.includes('<Title>')) {
-      projectName = text.replace(/<\/?Title>/g, '').trim();
-    }
-    if (text.includes('<Description>') || (description && !text.includes('</Description>'))) {
-      const str = extractString(line.tokens);
-      if (str) description += (description ? ' ' : '') + str;
-    }
-    if (text.includes('<Point>')) {
-      const str = extractString(line.tokens);
-      if (str) highlights.push(str);
-    }
-    if (line.tokens.some(t => t.type === 'string') && description && highlights.length > 0 && !text.includes('<Point>') && !text.includes('<Description>')) {
-      const str = extractString(line.tokens);
-      if (str && str.includes(',')) techLine = str;
+  const catRegex = /label:\s*"([^"]+)"[\s\S]*?items:\s*\[([^\]]+)\]/g;
+  let match;
+  while ((match = catRegex.exec(raw)) !== null) {
+    const label = match[1];
+    const items = match[2].match(/"([^"]+)"/g)?.map(s => s.replace(/"/g, '')) || [];
+    if (label && items.length > 0) {
+      parsed.push({ label, items });
     }
   }
 
-  const techItems = techLine ? techLine.split(',').map(s => s.replace(/"/g, '').trim()).filter(Boolean) : [];
-
-  const proxyUrl = (url: string) => `/api/proxy?url=${encodeURIComponent(url)}`;
-
-  const originalUrls: Record<string, string> = {
-    TheSwiftDictionary: 'https://the-swift-dictionary.vercel.app/',
-    Inkwell: 'https://inkwelll.vercel.app',
-    TheXOStore: 'https://thexostore.vercel.app',
-    Caliber: 'https://caliber-ai.vercel.app',
+  const categoryIcons: Record<string, React.ReactNode> = {
+    'Core Engineering': <LaptopIcon size={16} />,
+    'Frontend Ecosystem': <PaletteIcon size={16} />,
+    'Backend & Cloud': <CloudIcon size={16} />,
+    'Data & AI': <BrainIcon size={16} />,
+    'Web3 & Security': <BoxIcon size={16} />,
+    'DevOps & Tools': <WrenchIcon size={16} />,
   };
 
-  const liveUrls: Record<string, string> = {
-    TheSwiftDictionary: proxyUrl(originalUrls.TheSwiftDictionary),
-    Inkwell: originalUrls.Inkwell,
-    TheXOStore: originalUrls.TheXOStore,
-    // Caliber will use static image instead of live embed
-  };
-
-  const staticImages: Record<string, string> = {
-    Caliber: 'https://irfanrg.dev/projects/caliber.png',
-    BirthdayPresent: 'https://raw.githubusercontent.com/irfan-rg/portfolio/v2/public/projects/present.png',
-    QubeAI: 'https://raw.githubusercontent.com/irfan-rg/portfolio/v2/public/projects/qube.png',
-    F1RacePredictor: 'https://raw.githubusercontent.com/irfan-rg/portfolio/v2/public/projects/f1.png',
-  };
-
-  const liveUrl = liveUrls[projectName];
-  const staticImg = staticImages[projectName];
-  const displayUrl = originalUrls[projectName] || '';
-
-  const previewContent = liveUrl ? (
-    <iframe
-      src={liveUrl}
-      title={`${projectName} live preview`}
-      style={{ width: '100%', height: '100%', border: '0', background: 'white', display: 'block' }}
-    />
-  ) : staticImg ? (
-    <img src={staticImg} alt={projectName} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', background: 'transparent' }} />
-  ) : (
-    <div style={{ 
-      width: '100%', 
-      height: '100%',
-      background: 'linear-gradient(135deg, var(--bg-elevated), var(--bg-subtle))',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      color: 'var(--text-muted)'
-    }}>
-      <span style={{fontSize: '13px'}}>Project Preview</span>
-    </div>
-  );
-
   return (
-    <div className="preview-content preview-project" style={{ padding: "25px" }}>
-      <div style={{ 
-        width: '100%', 
-        maxWidth: '1100px',
-        margin: '0 auto',
-        borderRadius: '12px',
-        overflow: 'hidden',
-        border: '1px solid var(--border-color)',
-        background: 'var(--bg-elevated)'
-      }}>
-        <div style={{ 
-          height: '36px', 
-          background: 'var(--bg-subtle)', 
-          display: 'flex', 
-          alignItems: 'center', 
-          padding: '0 12px',
-          gap: '8px',
-          borderBottom: '1px solid var(--border-color)',
-          overflow: 'hidden'
-        }}>
-          <span style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#ff5f57', display: 'inline-block' }} />
-          <span style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#ffbd2e', display: 'inline-block' }} />
-          <span style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#28c840', display: 'inline-block' }} />
-          <div style={{ marginLeft: '12px', fontSize: '13px', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>
-            {displayUrl ? <a href={displayUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>{displayUrl}</a> : projectName}
-          </div>
-        </div>
-        <div style={{ height: '67vh', background: 'white', overflow: 'hidden'}}>
-          <div style={{ width: '150%', height: '154.5%', transform: 'scale(0.67)', transformOrigin: 'top left' }}>
-            {previewContent}
-          </div>
-        </div>
+    <div className="preview-content preview-skills" style={{ maxWidth: '900px', margin: '0 auto' }}>
+      <div style={{ fontFamily: 'var(--font-mono)', color: 'var(--syn-keyword)', fontSize: '13px', marginBottom: '24px' }}>
+        <span style={{ color: 'var(--text-disabled)' }}>$</span> cat skills.config.ts
       </div>
 
-      <div style={{ maxWidth: '1100px', margin: '24px auto 0' }}>
-        <h2 style={{ fontSize: '18px', marginBottom: '8px' }}>{projectName}</h2>
-        {description && <p style={{ color: 'var(--text-muted)', marginBottom: '16px' }}>{description}</p>}
-        {highlights.length > 0 && (
-          <div style={{ marginBottom: '16px' }}>
-            <h3 style={{ fontSize: '14px', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}><ZapIcon size={14}/> Highlights</h3>
-            <ul style={{ margin: 0, paddingLeft: '18px', color: 'var(--text-muted)' }}>
-              {highlights.map((h,i) => <li key={i} style={{ marginBottom: '6px' }}>{h}</li>)}
-            </ul>
+      {parsed.map((cat, i) => (
+        <div key={i} style={{ marginBottom: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
+            {categoryIcons[cat.label] || <TagIcon size={16} />}
+            <span style={{ color: 'var(--syn-string)', fontWeight: 500, fontSize: '14px' }}>{cat.label}</span>
+            <span style={{ color: 'var(--syn-type)' }}>[{cat.items.length} items]</span>
           </div>
-        )}
-        {techItems.length > 0 && (
-          <div>
-            <h3 style={{ fontSize: '14px', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}><WrenchIcon size={14}/> Tech Stack</h3>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-              {techItems.map(t => (
-                <span key={t} style={{ padding: '4px 10px', borderRadius: '999px', background: 'var(--bg-subtle)', border: '1px solid var(--border-color)', fontSize: '12px' }}>{t}</span>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── Contact Preview ───────────────────────────────────────────
-function ContactPreview() {
-  const fileText = contactFile.content.map(l => extractText(l.tokens)).join('\n');
-  // Extract the contact object values
-  const emailMatch = fileMatch(fileText, 'email');
-  const githubMatch = fileMatch(fileText, 'github');
-  const linkedinMatch = fileMatch(fileText, 'linkedin');
-  const portfolioMatch = fileMatch(fileText, 'portfolio');
-
-  return (
-    <div className="preview-content preview-contact">
-      <h2 className="preview-section-title">Let&apos;s Connect!</h2>
-      <p className="preview-subtitle" style={{ marginBottom: '24px' }}>
-        Whether it&apos;s about a project, an opportunity, or just to say hi — I&apos;d love to hear from you.
-      </p>
-
-      <div className="preview-contact-grid">
-        {emailMatch && (
-          <a href={`mailto:${emailMatch}`} className="preview-contact-card" target="_blank" rel="noopener noreferrer">
-            <span className="preview-contact-icon"><MailIcon size={16} color="var(--text-muted)" /></span>
-            <span className="preview-contact-label">Email</span>
-            <span className="preview-contact-value">{emailMatch}</span>
-          </a>
-        )}
-        {githubMatch && (
-          <a href={githubMatch} className="preview-contact-card" target="_blank" rel="noopener noreferrer">
-            <span className="preview-contact-icon"><GithubIcon size={16} color="var(--text-muted)" /></span>
-            <span className="preview-contact-label">GitHub</span>
-            <span className="preview-contact-value">{githubMatch.replace(/^https?:\/\//, '')}</span>
-          </a>
-        )}
-        {linkedinMatch && (
-          <a href={linkedinMatch} className="preview-contact-card" target="_blank" rel="noopener noreferrer">
-            <span className="preview-contact-icon"><LinkedinIcon size={16} color="var(--text-muted)" /></span>
-            <span className="preview-contact-label">LinkedIn</span>
-            <span className="preview-contact-value">{linkedinMatch.replace(/^https?:\/\//, '')}</span>
-          </a>
-        )}
-        {portfolioMatch && (
-          <a href={portfolioMatch} className="preview-contact-card" target="_blank" rel="noopener noreferrer">
-            <span className="preview-contact-icon"><GlobeIcon size={16} color="var(--text-muted)" /></span>
-            <span className="preview-contact-label">Portfolio</span>
-            <span className="preview-contact-value">{portfolioMatch.replace(/^https?:\/\//, '')}</span>
-          </a>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function fileMatch(text: string, key: string): string | null {
-  const re = new RegExp(`${key}\\s*:\\s*"([^"]+)"`);
-  const m = text.match(re);
-  return m ? m[1] : null;
-}
-
-// ── Env Preview ───────────────────────────────────────────────
-function EnvPreview() {
-  const vars = [
-    { key: 'DEVELOPER_NAME', val: 'Irfan Gulagundi', section: 'Identity' },
-    { key: 'DEVELOPER_ALIAS', val: 'irfan', section: 'Identity' },
-    { key: 'GITHUB_URL', val: 'github.com/irfangulagundi', section: 'Social Links', link: 'https://github.com/irfangulagundi' },
-    { key: 'LINKEDIN_URL', val: 'linkedin.com/in/irfangulagundi', section: 'Social Links', link: 'https://linkedin.com/in/irfangulagundi' },
-    { key: 'EMAIL', val: 'irfanrgulagundi@gmail.com', section: 'Social Links', link: 'mailto:irfanrgulagundi@gmail.com' },
-    { key: 'HIRING_STATUS', val: 'employed_and_loving_it', section: 'Secret 🤫' },
-    { key: 'COFFEE_PREFERENCE', val: 'black, no sugar, yes code', section: 'Secret 🤫' },
-    { key: 'FAVORITE_EDITOR', val: 'Zed', section: 'Secret 🤫' },
-    { key: 'DARK_MODE', val: 'always', section: 'Secret 🤫' },
-  ];
-
-  const sections = [...new Set(vars.map(v => v.section))];
-
-  return (
-    <div className="preview-content preview-env">
-      <h2 className="preview-section-title">Environment Variables</h2>
-      <p className="preview-subtitle" style={{ marginBottom: '24px', opacity: 0.6, display: 'flex', alignItems: 'center', gap: '6px' }}>
-        <CheckIcon size={14} color="var(--syn-operator)" /> Do not commit to version control!
-      </p>
-
-      {sections.map(section => (
-        <div key={section} className="preview-section" style={{ marginBottom: '20px' }}>
-          <h3 className="preview-card-title">{section}</h3>
-          <div className="preview-env-list">
-            {vars.filter(v => v.section === section).map(v => (
-              <div key={v.key} className="preview-env-item">
-                <span className="preview-env-key">{v.key}</span>
-                <span className="preview-env-eq">=</span>
-                {'link' in v && v.link ? (
-                  <a href={v.link} className="preview-env-val preview-env-link" target="_blank" rel="noopener noreferrer">{v.val}</a>
-                ) : (
-                  <span className="preview-env-val">{v.val}</span>
-                )}
-              </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+            {cat.items.map(item => (
+              <div key={item} style={{
+                padding: '6px 12px',
+                borderRadius: '6px',
+                background: 'var(--bg-secondary)',
+                border: '1px solid var(--border-color)',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '12px',
+                color: 'var(--text-primary)',
+              }}>{item}</div>
             ))}
           </div>
         </div>
@@ -562,38 +709,386 @@ function EnvPreview() {
   );
 }
 
-// ── Package.json Preview ──────────────────────────────────────
-function PackageJsonPreview() {
-  return (
-    <div className="preview-content preview-package">
-      <div className="preview-project-header">
-        <h1 className="preview-project-name">irfan-portfolio</h1>
-        <span className="preview-badge badge-green">v2.0.0</span>
-      </div>
-      <p className="preview-project-desc">
-        Portfolio of Irfan Gulagundi — Full-Stack Developer & SDE-1 at Zinier Inc.
-      </p>
+// ── Project Preview ───────────────────────────────────────────
+function ProjectPreview({ file }: { file: VirtualFile }) {
+  const lines = file.content;
 
-      <div className="preview-card">
-        <h3 className="preview-card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <BoxIcon size={14} /> Scripts
-        </h3>
-        <div className="preview-env-list">
-          <div className="preview-env-item"><span className="preview-env-key">dev</span><span className="preview-env-eq">→</span><span className="preview-env-val">next dev</span></div>
-          <div className="preview-env-item"><span className="preview-env-key">build</span><span className="preview-env-eq">→</span><span className="preview-env-val">next build</span></div>
-          <div className="preview-env-item"><span className="preview-env-key">start</span><span className="preview-env-eq">→</span><span className="preview-env-val">next start</span></div>
-          <div className="preview-env-item"><span className="preview-env-key">lint</span><span className="preview-env-eq">→</span><span className="preview-env-val">next lint</span></div>
+  let projectName = file.name.replace('.tsx', '');
+  let description = '';
+  const highlights: string[] = [];
+  let techItems: string[] = [];
+  let category = '';
+  let featured = false;
+  let liveUrl = '';
+  let repoUrl = '';
+
+  for (const line of lines) {
+    const text = extractText(line.tokens);
+    if (text.includes('<Title>')) {
+      projectName = extractString(line.tokens) || projectName;
+    }
+    if (text.includes('<Category>')) {
+      category = extractString(line.tokens) || '';
+    }
+    if (text.includes('<Featured>')) {
+      featured = extractString(line.tokens) === 'true';
+    }
+    if (text.includes('<LiveURL>')) {
+      liveUrl = extractString(line.tokens) || '';
+    }
+    if (text.includes('<RepoURL>')) {
+      repoUrl = extractString(line.tokens) || '';
+    }
+    if (text.includes('<Description>')) {
+      description = extractString(line.tokens) || '';
+    }
+    if (text.includes('<Point>')) {
+      const str = extractString(line.tokens);
+      if (str) highlights.push(str);
+    }
+    if (text.includes('<TechStack')) {
+      techItems = extractAllStrings(line.tokens).filter(t => t.includes(',') || t.length > 3);
+      const fullMatch = extractString(line.tokens);
+      if (fullMatch) {
+        techItems = fullMatch.replace(/"/g, '').split(',').map(s => s.trim()).filter(Boolean);
+      }
+    }
+  }
+
+  const staticImages: Record<string, string> = {
+    'Caliber': 'https://irfanrg.dev/projects/caliber.png',
+    'F1 Race Predictor': 'https://irfanrg.dev/projects/f1.png',
+  };
+
+  const staticImg = staticImages[projectName] || staticImages[projectName.replace(/\s+/g, ' ')];
+  const displayUrl = liveUrl || repoUrl || '';
+
+  const [useIframe, setUseIframe] = React.useState(!!liveUrl);
+  const [iframeError, setIframeError] = React.useState(false);
+
+  const previewContent = staticImg ? (
+    <img src={staticImg} alt={projectName} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', background: 'transparent' }} />
+  ) : (liveUrl && useIframe && !iframeError) ? (
+    <iframe
+      src={liveUrl}
+      title={`${projectName} live preview`}
+      style={{ width: '100%', height: '100%', border: '0', background: 'white', display: 'block' }}
+      onError={() => { setIframeError(true); setUseIframe(false); }}
+      sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+    />
+  ) : (
+    <div style={{
+      width: '100%',
+      height: '100%',
+      background: 'linear-gradient(135deg, var(--bg-secondary), var(--bg-elevated))',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      color: 'var(--text-muted)',
+      fontFamily: 'var(--font-mono)',
+      fontSize: '13px',
+    }}>
+      <span>Project Preview Unavailable</span>
+    </div>
+  );
+
+  return (
+    <div className="preview-content preview-project" style={{ padding: "25px" }}>
+      <div className="project-file-viewer" style={{
+        width: '100%',
+        maxWidth: '1100px',
+        margin: '0 auto',
+        borderRadius: '12px',
+        overflow: 'hidden',
+        border: '1px solid var(--border-color)',
+        background: 'var(--bg-elevated)'
+      }}>
+        <div style={{
+          height: '36px',
+          background: 'var(--bg-secondary)',
+          display: 'flex',
+          alignItems: 'center',
+          padding: '0 12px',
+          gap: '8px',
+          borderBottom: '1px solid var(--border-color)',
+          fontFamily: 'var(--font-mono)',
+          fontSize: '13px',
+        }}>
+          <span style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#ff5f57', display: 'inline-block' }} />
+          <span style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#ffbd2e', display: 'inline-block' }} />
+          <span style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#28c840', display: 'inline-block' }} />
+          <div style={{ marginLeft: '12px', fontSize: '13px', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>
+            {displayUrl ? <a href={displayUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>{displayUrl}</a> : projectName}
+          </div>
+        </div>
+        <div style={{ height: '67vh', background: 'white', overflow: 'hidden' }}>
+          <div style={{ width: '150%', height: '154.5%', transform: 'scale(0.67)', transformOrigin: 'top left' }}>
+            {previewContent}
+          </div>
         </div>
       </div>
 
-      <div className="preview-card">
-        <h3 className="preview-card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <TagIcon size={14} /> Keywords
-        </h3>
-        <div className="preview-tags-list">
-          {['portfolio', 'frontend', 'react', 'nextjs', 'typescript', 'zed-ide'].map(kw => (
-            <span key={kw} className="preview-tag-item">{kw}</span>
+      <div style={{ maxWidth: '1100px', margin: '24px auto 0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
+          <h2 style={{ fontSize: '22px', margin: 0 }}>{projectName}</h2>
+          {category && (
+            <Tag color="var(--text-muted)">{category}</Tag>
+          )}
+          {featured && (
+            <Tag color="var(--syn-constant)">Featured</Tag>
+          )}
+        </div>
+        {description && <p style={{ color: 'var(--text-muted)', marginBottom: '16px', lineHeight: 1.6 }}>{description}</p>}
+        {(liveUrl || repoUrl) && (
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
+            {liveUrl && (
+              <a href={liveUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: '6px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--text)', fontSize: '12px', fontWeight: 500, textDecoration: 'none' }}>
+                <GlobeIcon size={13} /> View Live
+              </a>
+            )}
+            {repoUrl && (
+              <a href={repoUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: '6px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--text)', fontSize: '12px', fontWeight: 500, textDecoration: 'none' }}>
+                <GithubIcon size={13} /> View Code
+              </a>
+            )}
+          </div>
+        )}
+        {highlights.length > 0 && (
+          <div style={{ marginBottom: '16px' }}>
+            <h3 style={{ fontSize: '14px', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontFamily: 'var(--font-mono)' }}><ZapIcon size={14}/> Highlights</h3>
+            <ul style={{ margin: 0, paddingLeft: '18px', color: 'var(--text-muted)' }}>
+              {highlights.map((h, i) => <li key={i} style={{ marginBottom: '6px' }}>{h}</li>)}
+            </ul>
+          </div>
+        )}
+        {techItems.length > 0 && (
+          <div>
+            <h3 style={{ fontSize: '14px', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontFamily: 'var(--font-mono)' }}><WrenchIcon size={14}/> Tech Stack</h3>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+              {techItems.map(t => (
+                <span key={t} style={{ padding: '4px 10px', borderRadius: '4px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', fontSize: '12px', fontFamily: 'var(--font-mono)' }}>{t}</span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Contact Preview — Terminal Interface ───────────────────────
+function ContactPreview() {
+  const email = extractPropertyValue(contactFile.content, 'email');
+  const github = extractPropertyValue(contactFile.content, 'github');
+  const linkedin = extractPropertyValue(contactFile.content, 'linkedin');
+  const portfolio = extractPropertyValue(contactFile.content, 'portfolio');
+
+  const contactLinks = [
+    { label: 'Email', value: email || '', href: `mailto:${email || ''}` },
+    { label: 'GitHub', value: github ? github.replace(/^https?:\/\//, '') : '', href: github || '' },
+    { label: 'LinkedIn', value: linkedin ? linkedin.replace(/^https?:\/\//, '') : '', href: linkedin || '' },
+    { label: 'Portfolio', value: portfolio ? portfolio.replace(/^https?:\/\//, '') : '', href: portfolio || '' },
+  ];
+
+  return (
+    <div className="preview-content preview-contact" style={{ maxWidth: '700px', margin: '0 auto' }}>
+      <div style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', marginBottom: '24px' }}>
+        <span style={{ color: 'var(--text-disabled)' }}>$</span> <span style={{ color: 'var(--syn-keyword)' }}>cat contact/reach-out.ts</span>
+      </div>
+
+      {/* Clean contact grid - no icons, no hover effects */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr',
+        gap: '2px',
+        background: 'var(--bg-secondary)',
+        borderRadius: '10px',
+        border: '1px solid var(--border-color)',
+        overflow: 'hidden',
+      }}>
+        {contactLinks.map((link) => (
+          link.value ? (
+            <a
+              key={link.label}
+              href={link.href}
+              target={link.href.startsWith('mailto:') ? undefined : '_blank'}
+              rel={link.href.startsWith('mailto:') ? undefined : 'noopener noreferrer'}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '14px 16px',
+                background: 'transparent',
+                color: 'var(--text)',
+                textDecoration: 'none',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '13px',
+                borderBottom: link.label === 'Portfolio' ? 'none' : '1px solid var(--border-color)',
+              }}
+            >
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ color: 'var(--syn-comment)', fontSize: '11px' }}>$ {link.label.toLowerCase()}</span>
+                <span style={{ color: 'var(--text-primary)' }}>{link.value}</span>
+              </div>
+              <span style={{ color: 'var(--syn-operator)', fontSize: '14px' }}>→</span>
+            </a>
+          ) : null
+        ))}
+      </div>
+
+      {/* Call to action */}
+      <div style={{
+        marginTop: '24px',
+        padding: '20px',
+        background: 'var(--bg-secondary)',
+        borderRadius: '10px',
+        border: '1px solid var(--border-color)',
+        textAlign: 'center',
+      }}>
+        <div style={{ color: 'var(--syn-comment)', fontFamily: 'var(--font-mono)', fontSize: '13px', marginBottom: '8px' }}>
+          <span>$</span> echo "Let's build something together"
+        </div>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '14px', margin: 0 }}>
+          whether it's a project, collaboration, or just a chat about web tech!
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ── Env Preview ───────────────────────────────────────────────
+function EnvPreview() {
+  const envFile = allFiles['env'];
+  if (!envFile) return null;
+
+  // Parse env vars from tokenized data
+  const envPairs: Array<{ key: string; value: string; category: string }> = [];
+  let currentCategory = '';
+
+  for (const line of envFile.content) {
+    const text = extractText(line.tokens);
+    if (text.startsWith('# ') && text.length > 2) { currentCategory = text.replace(/^# /, ''); continue; }
+    if (text.startsWith('#')) continue;
+    if (!text.includes('=')) continue;
+
+    const [key, ...rest] = text.split('=');
+    const val = rest.join('=').replace(/^["']|["']$/g, '');
+    if (key && val) envPairs.push({ key: key.trim(), value: val, category: currentCategory });
+  }
+
+  return (
+    <div className="preview-content preview-env">
+      <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', marginBottom: '24px' }}>
+          <span style={{ color: 'var(--syn-comment)' }}>$</span> <span style={{ color: 'var(--syn-keyword)' }}>cat .env</span>
+        </div>
+
+        <div style={{ background: 'var(--bg-secondary)', borderRadius: '8px', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
+          {envPairs.map((pair, i) => (
+            <div key={i} style={{
+              display: 'flex',
+              fontFamily: 'var(--font-mono)',
+              fontSize: '13px',
+              padding: '8px 16px',
+              borderBottom: i < envPairs.length - 1 ? '1px solid var(--border-color)' : 'none',
+            }}>
+              <span style={{ color: 'var(--syn-variable)' }}>{pair.key}</span>
+              <span style={{ color: 'var(--syn-operator)' }}>=</span>
+              <span style={{ color: 'var(--syn-string)' }}>"{pair.value}"</span>
+              {pair.category && (
+                <span style={{ color: 'var(--syn-comment)', marginLeft: 'auto', fontSize: '11px' }}># {pair.category}</span>
+              )}
+            </div>
           ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Package.json Preview ───────────────────────────────────────
+function PackageJsonPreview() {
+  const pkgFile = allFiles['packagejson'];
+  if (!pkgFile) return null;
+
+  // Parse from tokenized data
+  const pkg: Record<string, any> = {};
+  let currentKey = '';
+  let inScripts = false;
+  let inDeps = false;
+
+  pkg.scripts = {};
+  pkg.dependencies = {};
+
+  for (const line of pkgFile.content) {
+    const text = extractText(line.tokens);
+    const propToken = line.tokens.find(t => t.type === 'string' && !t.text.includes(' '));
+    if (propToken && text.includes(':')) {
+      const key = propToken.text.replace(/"/g, '');
+      if (key === 'name' || key === 'version' || key === 'description' || key === 'author' || key === 'license' || key === 'private') {
+        currentKey = key;
+      }
+      if (key === 'scripts') inScripts = true;
+      if (key === 'dependencies') inDeps = true;
+    }
+
+    const strTokens = line.tokens.filter(t => t.type === 'string');
+    strTokens.forEach(t => {
+      const val = t.text.replace(/"/g, '');
+      if (inScripts && !val.includes(':') && val !== 'scripts') {
+        // Will capture script values
+      }
+    });
+
+    const constToken = line.tokens.find(t => t.type === 'constant');
+    if (constToken) {
+      if (currentKey === 'private') pkg.private = constToken.text === 'true';
+    }
+  }
+
+  // Fallback: extract from raw text
+  const raw = pkgFile.content.map(l => extractText(l.tokens)).join('\n');
+  try {
+    Object.assign(pkg, JSON.parse(raw));
+  } catch {}
+
+  return (
+    <div className="preview-content preview-packagejson">
+      <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', marginBottom: '24px' }}>
+          <span style={{ color: 'var(--syn-comment)' }}>$</span> <span style={{ color: 'var(--syn-keyword)' }}>cat package.json</span>
+        </div>
+
+        <div style={{ background: 'var(--bg-secondary)', borderRadius: '8px', padding: '20px', border: '1px solid var(--border-color)' }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '14px', lineHeight: 1.8 }}>
+            <div><span style={{ color: 'var(--syn-string)' }}>"name"</span>: <span style={{ color: 'var(--syn-constant)' }}>"{pkg.name}"</span>,</div>
+            <div><span style={{ color: 'var(--syn-string)' }}>"version"</span>: <span style={{ color: 'var(--syn-constant)' }}>"{pkg.version}"</span>,</div>
+            <div><span style={{ color: 'var(--syn-string)' }}>"description"</span>: <span style={{ color: 'var(--syn-constant)' }}>"{pkg.description}"</span>,</div>
+            <div><span style={{ color: 'var(--syn-string)' }}>"author"</span>: <span style={{ color: 'var(--syn-constant)' }}>"{pkg.author}"</span>,</div>
+            <div><span style={{ color: 'var(--syn-string)' }}>"license"</span>: <span style={{ color: 'var(--syn-constant)' }}>"{pkg.license}"</span>,</div>
+            {pkg.scripts && Object.keys(pkg.scripts).length > 0 && (
+              <div>
+                <span style={{ color: 'var(--syn-string)' }}>"scripts"</span>: {'{'}
+                <div style={{ paddingLeft: '16px' }}>
+                  {Object.entries(pkg.scripts).map(([k, v]) => (
+                    <div key={k}><span style={{ color: 'var(--syn-string)' }}>"{k}"</span>: <span style={{ color: 'var(--syn-constant)' }}>"{String(v)}"</span>,</div>
+                  ))}
+                </div>
+                {'},'}
+              </div>
+            )}
+            {pkg.dependencies && Object.keys(pkg.dependencies).length > 0 && (
+              <div>
+                <span style={{ color: 'var(--syn-string)' }}>"dependencies"</span>: {'{'}
+                <div style={{ paddingLeft: '16px' }}>
+                  {Object.entries(pkg.dependencies).map(([k, v]) => (
+                    <div key={k}><span style={{ color: 'var(--syn-string)' }}>"{k}"</span>: <span style={{ color: 'var(--syn-constant)' }}>"{String(v)}"</span>,</div>
+                  ))}
+                </div>
+                {'}'}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -623,7 +1118,6 @@ function PreviewPane({ activeFileId }: PreviewPaneProps) {
     case 'env':        return <EnvPreview />;
     case 'packagejson': return <PackageJsonPreview />;
     default:
-      // Project files
       if (file.path.includes('projects/')) {
         return <ProjectPreview file={file} />;
       }

@@ -42,5 +42,5 @@ export const terminalSequence: TerminalEntry[] = [
   },
 ];
 
-export const TERMINAL_PROMPT = 'irfan@portfolio';
-export const TERMINAL_CWD = '~/irfan-portfolio';
+export const TERMINAL_PROMPT = 'irfan@';
+export const TERMINAL_CWD = '~/portfolio';

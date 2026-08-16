@@ -222,7 +222,7 @@ function TerminalPanel({ isOpen, onToggle }: TerminalPanelProps) {
         boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
         zIndex: 1000,
       }}>
-        Press the terminal icon in the status bar to close
+        press terminal icon to close
       </div>
     )}
     </div>

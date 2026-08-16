@@ -166,7 +166,7 @@ export default function IDEPortfolio() {
 
       {/* Keyboard shortcut hint — shows briefly on first visit */}
       <div className="shortcut-hint" role="status" aria-live="polite">
-        Press <kbd>⌘+k</kbd> to search files
+        press <span style={{color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: '4px', padding: '2px 6px' }}>⌘ K</span> to search files
       </div>
     </>
   );
