@@ -624,7 +624,7 @@ function ExperiencePreview() {
       })}
 
       {/* Education Branch */}
-      <div style={{ marginTop: '24px', marginBottom: '8px', fontFamily: 'var(--font-mono)', fontSize: '13px', color: 'var(--syn-comment)' }}>
+      <div style={{ marginTop: '24px', marginBottom: '8px', fontFamily: 'var(--font-mono)', fontSize: '13px', color: 'var( --text-muted)' }}>
         # Education branch
       </div>
 
@@ -639,7 +639,7 @@ function ExperiencePreview() {
               <div style={{ flex: 1 }}>
                 <div style={{ color: 'var(--syn-function)', marginBottom: '2px', fontWeight: 500 }}>{edu.degree}</div>
                 <div style={{ color: 'var(--syn-type)', fontSize: '12px' }}>{edu.institution}, {edu.location}</div>
-                <div style={{ color: 'var(--syn-comment)', fontSize: '12px' }}>{edu.period} • Graduated {edu.graduated}</div>
+                <div style={{ color: 'var(--syn---text-muted)', fontSize: '12px' }}>{edu.period} • Graduated {edu.graduated}</div>
               </div>
             </div>
           </div>
@@ -1011,46 +1011,65 @@ function PackageJsonPreview() {
   const pkgFile = allFiles['packagejson'];
   if (!pkgFile) return null;
 
-  // Parse from tokenized data
-  const pkg: Record<string, any> = {};
-  let currentKey = '';
+  // Build JSON from tokenized lines
+  const jsonLines: string[] = [];
   let inScripts = false;
   let inDeps = false;
-
-  pkg.scripts = {};
-  pkg.dependencies = {};
+  let inKeywords = false;
 
   for (const line of pkgFile.content) {
-    const text = extractText(line.tokens);
-    const propToken = line.tokens.find(t => t.type === 'string' && !t.text.includes(' '));
-    if (propToken && text.includes(':')) {
-      const key = propToken.text.replace(/"/g, '');
-      if (key === 'name' || key === 'version' || key === 'description' || key === 'author' || key === 'license' || key === 'private') {
-        currentKey = key;
-      }
-      if (key === 'scripts') inScripts = true;
-      if (key === 'dependencies') inDeps = true;
-    }
+    const text = extractText(line.tokens).trim();
+    if (!text || text === '{' || text === '}' || text === '},' || text === ']') continue;
 
+    // Detect sections
+    if (text.includes('"scripts"') && text.includes('{')) { inScripts = true; inDeps = false; inKeywords = false; jsonLines.push(text.replace(/,$/, '')); continue; }
+    if (text.includes('"dependencies"') && text.includes('{')) { inDeps = true; inScripts = false; inKeywords = false; jsonLines.push(text.replace(/,$/, '')); continue; }
+    if (text.includes('"keywords"') && text.includes('[')) { inKeywords = true; inScripts = false; inDeps = false; continue; }
+    if (inScripts && (text === '}' || text === '},')) { inScripts = false; jsonLines.push(text.replace(/,$/, '')); continue; }
+    if (inDeps && (text === '}' || text === '},')) { inDeps = false; jsonLines.push(text.replace(/,$/, '')); continue; }
+    if (inKeywords && (text === ']' || text === '],')) { inKeywords = false; continue; }
+    if (inKeywords) continue;
+
+    // Extract string key-value pairs
     const strTokens = line.tokens.filter(t => t.type === 'string');
-    strTokens.forEach(t => {
-      const val = t.text.replace(/"/g, '');
-      if (inScripts && !val.includes(':') && val !== 'scripts') {
-        // Will capture script values
-      }
-    });
-
     const constToken = line.tokens.find(t => t.type === 'constant');
-    if (constToken) {
-      if (currentKey === 'private') pkg.private = constToken.text === 'true';
+
+    if (strTokens.length >= 2) {
+      const key = strTokens[0].text;
+      const val = strTokens[1].text;
+      jsonLines.push(`  ${key}: ${val},`);
+    } else if (strTokens.length === 1 && constToken) {
+      const key = strTokens[0].text;
+      jsonLines.push(`  ${key}: ${constToken.text},`);
+    } else if (strTokens.length === 1 && text.includes(':')) {
+      // Section opener like "scripts": {
+      jsonLines.push(text.replace(/,$/, ''));
     }
   }
 
-  // Fallback: extract from raw text
-  const raw = pkgFile.content.map(l => extractText(l.tokens)).join('\n');
+  // Parse the reconstructed JSON
+  let pkg: Record<string, any> = {};
   try {
-    Object.assign(pkg, JSON.parse(raw));
-  } catch {}
+    const jsonStr = '{' + jsonLines.join('\n') + '}';
+    pkg = JSON.parse(jsonStr);
+  } catch {
+    // Fallback: basic extraction
+    const raw = pkgFile.content.map(l => extractText(l.tokens)).join('\n');
+    const nameMatch = raw.match(/"name":\s*"([^"]+)"/);
+    const versionMatch = raw.match(/"version":\s*"([^"]+)"/);
+    const descMatch = raw.match(/"description":\s*"([^"]+)"/);
+    const authorMatch = raw.match(/"author":\s*"([^"]+)"/);
+    const licenseMatch = raw.match(/"license":\s*"([^"]+)"/);
+    pkg = {
+      name: nameMatch?.[1] || 'irfan-portfolio',
+      version: versionMatch?.[1] || '2.0.0',
+      description: descMatch?.[1] || '',
+      author: authorMatch?.[1] || '',
+      license: licenseMatch?.[1] || 'MIT',
+      scripts: {},
+      dependencies: {},
+    };
+  }
 
   return (
     <div className="preview-content preview-packagejson">
